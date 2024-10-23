@@ -31,6 +31,3 @@ The application should run out of the box without any server-side components, as
 ## License
 
 This project is open-source and available under the [MIT License](LICENSE).
-
-
-[
