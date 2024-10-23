@@ -24,7 +24,7 @@ AI-Talk-Text is a lightweight web application focused on handling transcription 
     cd ai-talk-text
     ```
 
-3. **Open `index.html` in Your Favorite Browser**
+3. **Open `public/index.html` in Your Favorite Browser**
 
 The application should run out of the box without any server-side components, as it is built entirely with HTML, CSS (Bulma), and JavaScript (Vue.js).
 
