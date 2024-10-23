@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI-Talk-Text</title>
+  <link href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body.dark-mode {
+      background-color: #2e2e2e !important;
+      color: #ffffff !important;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .dark-mode .navbar,
+    .dark-mode .card,
+    .dark-mode .modal-card,
+    .dark-mode .modal-card-body,
+    .dark-mode .box,
+    .dark-mode .table,
+    .dark-mode .input,
+    .dark-mode .textarea,
+    .dark-mode .select select,
+    .dark-mode .modal-card-head,
+    .dark-mode .modal-card-foot {
+      background-color: #4e4e4e !important;
+      color: #ffffff !important;
+    }
+
+    .dark-mode .table.is-striped tbody tr:not(.is-selected):nth-child(2n) {
+      background-color: #3a3a3a !important;
+    }
+
+    .dark-mode .button.is-light {
+      background-color: #5a5a5a !important;
+      color: #ffffff !important;
+    }
+
+    .dark-mode th,
+    .dark-mode td,
+    .dark-mode label,
+    .dark-mode .navbar-item,
+    .dark-mode .title,
+    .dark-mode .modal-card-title,
+    .dark-mode strong {
+      color: #ffffff !important;
+    }
+
+    .dark-mode .modal-card {
+      box-shadow: none;
+    }
+
+    .dark-mode a {
+      color: #00d1b2 !important;
+    }
+
+    .navbar-brand {
+      flex-grow: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="min-height: 100vh; display: flex; flex-direction: column;">
+    <!-- Header -->
+    <nav class="navbar" role="navigation" aria-label="main navigation">
+      <div class="navbar-brand">
+        <a class="navbar-item">
+          <h1 class="title">AI-Talk-Text</h1>
+        </a>
+        <div class="navbar-item" style="margin-left: auto;">
+          <button @click="toggleDarkMode" class="button">
+            {{ darkMode ? t.darkModeDay : t.darkModeNight }}
+          </button>
+          &nbsp;
+          <button @click="toggleLanguage" class="button is-small is-text">
+            {{ language === 'ru' ? 'EN' : 'RU' }}
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <section class="section" v-if="currentPage === 'transcripts'" style="flex-grow: 1;">
+      <div class="container">
+        <button class="button is-primary" @click="openTranscriptModal">{{ t.createTranscript }}</button>
+        
+        <table class="table is-fullwidth is-striped">
+          <thead>
+            <tr>
+              <th>{{ t.title }}</th>
+              <th>{{ t.requestsCount }}</th>
+              <th>{{ t.actions }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="transcript in transcripts" :key="transcript.id">
+              <td><a href="#" @click.prevent="viewTranscript(transcript)">{{ transcript.title }}</a></td>
+              <td>{{ transcript.requests.length }}</td>
+              <td>
+                <button class="button is-small is-info" @click="viewTranscript(transcript)">{{ t.view }}</button>
+                <button class="button is-small is-warning" @click="editTranscript(transcript)">{{ t.edit }}</button>
+                <button class="button is-small is-danger" @click="confirmDeleteTranscript(transcript)">{{ t.delete }}</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" v-if="currentPage === 'viewTranscript'" style="flex-grow: 1;">
+      <div class="container">
+        <h1 class="title">{{ selectedTranscript.title }}</h1>
+        <table class="table is-fullwidth is-striped">
+          <thead>
+            <tr>
+              <th>{{ t.title }}</th>
+              <th>{{ t.prompt }}</th>
+              <th>{{ t.actions }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="request in selectedTranscript.requests" :key="request.id">
+              <td>{{ request.title }}</td>
+              <td>{{ request.prompt }}</td>
+              <td>
+                <button class="button is-small is-link" @click="viewRequest(request)">{{ t.view }}</button>
+                <button class="button is-small is-warning" @click="editRequest(request)">{{ t.edit }}</button>
+                <button class="button is-small is-danger" @click="deleteRequest(selectedTranscript, request)">{{ t.delete }}</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <button class="button is-primary" @click="openRequestModal(selectedTranscript)">{{ t.addRequest }}</button>
+        <button class="button is-light" @click="currentPage='transcripts'">{{ t.return }}</button>
+      </div>
+    </section>
+
+    <section class="section" v-if="currentPage === 'viewRequest'" style="flex-grow: 1;">
+      <div class="container">
+        <h1 class="title">{{ selectedRequest.title }}</h1>
+        <p><strong>{{ t.prompt }}:</strong> {{ selectedRequest.prompt }}</p>
+        <div>
+          <button class="button is-primary"
+                  :class="{ 'is-loading': isProcessing }"
+                  @click="processRequest(selectedRequest)">
+            {{ t.process }}
+          </button>
+        </div>
+        <p><strong>{{ t.result }}:</strong></p>
+        <div class="box">{{ selectedRequest.result }}</div>
+        <button class="button is-light" @click="viewTranscript(selectedTranscript)">{{ t.return }}</button>
+      </div>
+    </section>
+
+    <div class="modal" :class="{ 'is-active': showTranscriptModal }">
+      <div class="modal-background"></div>
+      <div class="modal-card">
+        <header class="modal-card-head">
+          <p class="modal-card-title">{{ editingTranscript ? t.editTranscript : t.newTranscript }}</p>
+          <button class="delete" aria-label="close" @click="closeTranscriptModal"></button>
+        </header>
+        <section class="modal-card-body">
+          <div class="field">
+            <label class="label">{{ t.title }}</label>
+            <div class="control">
+              <input class="input" type="text" ref="transcriptTitle" v-model="newTranscript.title" required>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label">{{ t.content }}</label>
+            <div class="control">
+              <textarea class="textarea" v-model="newTranscript.content"></textarea>
+            </div>
+          </div>
+        </section>
+        <footer class="modal-card-foot">
+          <button class="button is-primary" @click="saveTranscript">{{ editingTranscript ? t.save : t.create }}</button>
+          <button class="button" @click="closeTranscriptModal">{{ t.cancel }}</button>
+        </footer>
+      </div>
+    </div>
+
+    <div class="modal" :class="{ 'is-active': showRequestModal }">
+      <div class="modal-background"></div>
+      <div class="modal-card">
+        <header class="modal-card-head">
+          <p class="modal-card-title">{{ editingRequest ? t.editRequest : t.newRequest }}</p>
+          <button class="delete" aria-label="close" @click="showRequestModal = false"></button>
+        </header>
+        <section class="modal-card-body">
+          <div class="field">
+            <label class="label">{{ t.title }}</label>
+            <div class="control">
+              <input class="input" type="text" ref="requestTitle" v-model="newRequest.title" required>
+            </div>
+          </div>
+          <div class="field">
+            <label class="label">{{ t.prompt }}</label>
+            <div class="control">
+              <textarea class="textarea" v-model="newRequest.prompt"></textarea>
+            </div>
+          </div>
+        </section>
+        <footer class="modal-card-foot">
+          <button class="button is-primary" @click="saveRequest">{{ editingRequest ? t.save : t.createRequest }}</button>
+          <button class="button" @click="showRequestModal = false">{{ t.cancel }}</button>
+        </footer>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const dictionaries = {
+      ru: {
+        darkModeDay: 'Дневной режим',
+        darkModeNight: 'Ночной режим',
+        createTranscript: 'Создать транскрибацию',
+        title: 'Название',
+        requestsCount: 'Кол-во запросов',
+        actions: 'Действия',
+        view: 'Просмотр',
+        edit: 'Редактировать',
+        delete: 'Удалить',
+        addRequest: 'Добавить запрос',
+        return: 'Вернуться',
+        prompt: 'Промпт',
+        process: 'Обработать',
+        result: 'Результат',
+        editTranscript: 'Редактирование транскрибации',
+        newTranscript: 'Новая транскрибация',
+        content: 'Содержимое',
+        save: 'Сохранить',
+        create: 'Создать',
+        cancel: 'Отмена',
+        editRequest: 'Редактирование запроса',
+        newRequest: 'Новый запрос',
+        createRequest: 'Создать запрос',
+        confirmDelete: 'Удалить'
+      },
+      en: {
+        darkModeDay: 'Day Mode',
+        darkModeNight: 'Night Mode',
+        createTranscript: 'Create Transcript',
+        title: 'Title',
+        requestsCount: 'Request Count',
+        actions: 'Actions',
+        view: 'View',
+        edit: 'Edit',
+        delete: 'Delete',
+        addRequest: 'Add Request',
+        return: 'Return',
+        prompt: 'Prompt',
+        process: 'Process',
+        result: 'Result',
+        editTranscript: 'Edit Transcript',
+        newTranscript: 'New Transcript',
+        content: 'Content',
+        save: 'Save',
+        create: 'Create',
+        cancel: 'Cancel',
+        editRequest: 'Edit Request',
+        newRequest: 'New Request',
+        createRequest: 'Create Request',
+        confirmDelete: 'Delete',
+      }
+    };
+
+    new Vue({
+      el: '#app',
+      data: {
+        language: 'ru',
+        t: {},
+        transcripts: [
+          { id: '001', title: 'Интервью', date: '2024-10-01', content: 'Текст транскрибации', requests: [] }
+        ],
+        newTranscript: {
+          id: null,
+          title: '',
+          content: ''
+        },
+        editingTranscript: false,
+        selectedTranscript: null,
+        selectedRequest: null,
+        newRequest: {
+          id: null,
+          title: '',
+          prompt: '',
+          result: ''
+        },
+        editingRequest: false,
+        showTranscriptModal: false,
+        showRequestModal: false,
+        currentPage: 'transcripts',
+        darkMode: false,
+        isProcessing: false
+      },
+      mounted() {
+        this.setInitialDarkMode();
+        this.setInitialLanguage(); // Set the initial language based on the browser's settings
+        this.updateLanguage();
+      },
+      methods: {
+        setInitialLanguage() {
+          const browserLanguage = navigator.language || navigator.userLanguage;
+          this.language = browserLanguage.startsWith('ru') ? 'ru' : 'en';
+        },
+        toggleLanguage() {
+          this.language = this.language === 'ru' ? 'en' : 'ru';
+          this.updateLanguage();
+        },
+        updateLanguage() {
+          this.t = dictionaries[this.language];
+        },
+        toggleDarkMode() {
+          this.darkMode = !this.darkMode;
+          document.body.classList.toggle('dark-mode', this.darkMode);
+        },
+        setInitialDarkMode() {
+          const hour = new Date().getHours();
+          this.darkMode = (hour >= 18 || hour < 6);
+          document.body.classList.toggle('dark-mode', this.darkMode);
+        },
+        autoFocusModal() {
+          this.$nextTick(() => {
+            if (this.showTranscriptModal && this.$refs.transcriptTitle) {
+              this.$refs.transcriptTitle.focus();
+            }
+            if (this.showRequestModal && this.$refs.requestTitle) {
+              this.$refs.requestTitle.focus();
+            }
+          });
+        },
+        openTranscriptModal() {
+          this.showTranscriptModal = true;
+          this.autoFocusModal();
+        },
+        closeTranscriptModal() {
+          this.showTranscriptModal = false;
+          this.editingTranscript = false;
+          this.newTranscript = { id: null, title: '', content: '' };
+        },
+        saveTranscript() {
+          if (this.newTranscript.title && this.newTranscript.content) {
+            if (this.editingTranscript) {
+              const index = this.transcripts.findIndex(t => t.id === this.newTranscript.id);
+              if (index !== -1) {
+                this.transcripts.splice(index, 1, {
+                  ...this.newTranscript,
+                });
+              }
+            } else {
+              this.transcripts.push({
+                id: new Date().getTime().toString(),
+                title: this.newTranscript.title,
+                date: new Date().toISOString().slice(0, 10),
+                content: this.newTranscript.content,
+                requests: []
+              });
+            }
+            this.closeTranscriptModal();
+            this.currentPage = 'transcripts';
+          }
+        },
+        editTranscript(transcript) {
+          this.newTranscript = { ...transcript };
+          this.editingTranscript = true;
+          this.openTranscriptModal();
+        },
+        confirmDeleteTranscript(transcript) {
+          if (confirm(`${this.t.confirmDelete} "${transcript.title}"?`)) {
+            this.deleteTranscript(transcript);
+          }
+        },
+        deleteTranscript(transcript) {
+          this.transcripts = this.transcripts.filter(t => t.id !== transcript.id);
+        },
+        viewTranscript(transcript) {
+          this.selectedTranscript = transcript;
+          this.currentPage = 'viewTranscript';
+        },
+        openRequestModal(transcript) {
+          this.selectedTranscript = transcript;
+          this.newRequest = { id: null, title: '', prompt: '', result: '' };
+          this.editingRequest = false;
+          this.showRequestModal = true;
+          this.autoFocusModal();
+        },
+        saveRequest() {
+          if (this.newRequest.title && this.newRequest.prompt) {
+            if (this.editingRequest) {
+              const index = this.selectedTranscript.requests.findIndex(r => r.id === this.newRequest.id);
+              if (index !== -1) {
+                this.selectedTranscript.requests.splice(index, 1, {
+                  ...this.newRequest,
+                });
+              }
+            } else {
+              this.selectedTranscript.requests.push({
+                id: new Date().getTime().toString(),
+                title: this.newRequest.title,
+                prompt: this.newRequest.prompt,
+                result: ''
+              });
+            }
+            this.showRequestModal = false;
+          }
+        },
+        viewRequest(request) {
+          this.selectedRequest = request;
+          this.currentPage = 'viewRequest';
+        },
+        editRequest(request) {
+          this.newRequest = { ...request };
+          this.editingRequest = true;
+          this.showRequestModal = true;
+          this.autoFocusModal();
+        },
+        deleteRequest(transcript, request) {
+          if (confirm(`${this.t.confirmDelete} "${request.title}"?`)) {
+            transcript.requests = transcript.requests.filter(r => r.id !== request.id);
+          }
+        },
+        processRequest(request) {
+          this.isProcessing = true; // Add loading state
+          request.result = this.language === 'ru' ? 'Запрос выслан' : 'Request sent';
+          setTimeout(() => {
+            request.result = this.language === 'ru' ? 'Пример саммари текста транскрибации' : 'Example summary of transcript text';
+            this.isProcessing = false; // Remove loading state
+          }, 1000);
+        }
+      }
+    });
+  </script>
+</body>
+</html>
