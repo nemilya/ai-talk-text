@@ -16,7 +16,7 @@ AI-Talk-Text is a lightweight web application focused on handling transcription 
 
 1. **Clone the Repository** 
     ```bash
-    git clone https://github.com/yourusername/ai-talk-text.git
+    git clone https://github.com/nemilya/ai-talk-text.git
     ```
 
 2. **Navigate to the Project Directory**
